@@ -70,6 +70,9 @@ dependencies {
     
     // Accompanist Permissions
     implementation(libs.accompanist.permissions)
+    
+    // Navigation Compose
+    implementation(libs.androidx.navigation.compose)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

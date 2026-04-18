@@ -17,7 +17,8 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 fun PrivateGalleryScreen(
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onClearFace: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -51,6 +52,18 @@ fun PrivateGalleryScreen(
 
         Button(onClick = onNavigateBack) {
             Text("Lock & Return")
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Button(
+            onClick = {
+                onClearFace()
+                onNavigateBack()
+            },
+            colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFFF44336))
+        ) {
+            Text("Erase Face ID & Return")
         }
     }
 }

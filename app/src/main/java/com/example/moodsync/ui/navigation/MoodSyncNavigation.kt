@@ -47,6 +47,9 @@ fun MoodSyncNavigation() {
                 onNavigateBack = {
                     moodViewModel.lockGallery()
                     navController.popBackStack()
+                },
+                onClearFace = {
+                    moodViewModel.clearRegisteredFace()
                 }
             )
         }

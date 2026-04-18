@@ -1,6 +1,7 @@
 package com.example.moodsync.viewmodel
 
 import android.app.Application
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Rect
 import androidx.lifecycle.AndroidViewModel
@@ -12,6 +13,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 class MoodViewModel(application: Application) : AndroidViewModel(application) {
+    // Shared Preferences for Persistence
+    private val prefs = application.getSharedPreferences("MoodSyncPrefs", Context.MODE_PRIVATE)
+
     // ML Model
     private val faceNetModel = FaceNetModel(application)
 
@@ -26,6 +30,15 @@ class MoodViewModel(application: Application) : AndroidViewModel(application) {
     
     private val _isRegistered = MutableStateFlow(false)
     val isRegistered: StateFlow<Boolean> = _isRegistered.asStateFlow()
+
+    init {
+        // Load the saved face signature if it exists
+        val savedFace = prefs.getString("registered_face", null)
+        if (savedFace != null) {
+            registeredEmbedding = savedFace.split(",").map { it.toFloat() }.toFloatArray()
+            _isRegistered.value = true
+        }
+    }
 
     private val _isUnlocked = MutableStateFlow(false)
     val isUnlocked: StateFlow<Boolean> = _isUnlocked.asStateFlow()
@@ -45,7 +58,12 @@ class MoodViewModel(application: Application) : AndroidViewModel(application) {
         val bitmap = currentCroppedFace ?: return
         viewModelScope.launch {
             try {
-                registeredEmbedding = faceNetModel.getFaceEmbedding(bitmap)
+                val embedding = faceNetModel.getFaceEmbedding(bitmap)
+                registeredEmbedding = embedding
+                
+                // Save to local storage so it survives app restarts
+                prefs.edit().putString("registered_face", embedding.joinToString(",")).apply()
+                
                 _isRegistered.value = true
                 _verificationMessage.value = "Face registered successfully!"
             } catch (e: Exception) {
@@ -95,6 +113,14 @@ class MoodViewModel(application: Application) : AndroidViewModel(application) {
     
     fun clearMessage() {
         _verificationMessage.value = null
+    }
+
+    fun clearRegisteredFace() {
+        registeredEmbedding = null
+        prefs.edit().remove("registered_face").apply()
+        _isRegistered.value = false
+        _isUnlocked.value = false
+        _verificationMessage.value = "Registered face cleared."
     }
 
     override fun onCleared() {

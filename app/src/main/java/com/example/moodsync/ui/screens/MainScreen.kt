@@ -110,7 +110,7 @@ fun MainScreen(
                         CircularProgressIndicator(color = Color.White, modifier = Modifier.padding(end = 8.dp))
                         Text("Scanning...")
                     } else {
-                        Text("🔒 Verify & Unlock")
+                        Text("🔒 Verify")
                     }
                 }
             }

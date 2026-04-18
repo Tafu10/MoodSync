@@ -62,7 +62,6 @@ dependencies {
     
     // TensorFlow Lite
     implementation(libs.tensorflow.lite)
-    implementation(libs.tensorflow.lite.support)
     
     // Media3 / ExoPlayer
     implementation(libs.androidx.media3.exoplayer)
@@ -74,6 +73,9 @@ dependencies {
     // Navigation Compose
     implementation(libs.androidx.navigation.compose)
 
+    // Biometrics
+    implementation(libs.androidx.biometric)
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -84,6 +86,5 @@ dependencies {
 }
 
 configurations.all {
-    exclude(group = "org.tensorflow", module = "tensorflow-lite-api")
     exclude(group = "org.tensorflow", module = "tensorflow-lite-support-api")
 }

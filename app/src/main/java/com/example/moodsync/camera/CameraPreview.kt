@@ -23,7 +23,7 @@ import java.util.concurrent.Executors
 @Composable
 fun CameraPreview(
     modifier: Modifier = Modifier,
-    onFrameCaptured: (ImageProxy) -> Unit = {}
+    analyzer: ImageAnalysis.Analyzer? = null
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -57,12 +57,9 @@ fun CameraPreview(
                     // Drop frames if processing is too slow
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                     .build()
-                    .also {
-                        it.setAnalyzer(cameraExecutor) { imageProxy ->
-                            onFrameCaptured(imageProxy)
-                            // We must close the image proxy after we are done with it
-                            // For now, we immediately close it until the ML pipeline is ready
-                            imageProxy.close()
+                    .also { analysis ->
+                        analyzer?.let {
+                            analysis.setAnalyzer(cameraExecutor, it)
                         }
                     }
 

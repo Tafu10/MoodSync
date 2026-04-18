@@ -38,6 +38,7 @@ fun MainScreen(
     val isVerifying by viewModel.isVerifying.collectAsState()
     val isRegistered by viewModel.isRegistered.collectAsState()
     val verificationMessage by viewModel.verificationMessage.collectAsState()
+    val currentEmotion by viewModel.currentEmotion.collectAsState()
     val context = LocalContext.current
 
     val faceAnalyzer = remember {
@@ -67,6 +68,23 @@ fun MainScreen(
             modifier = Modifier.fillMaxSize(),
             analyzer = faceAnalyzer
         )
+
+        // Emotion Badge (Top Center)
+        currentEmotion?.let { emotion ->
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 48.dp)
+                    .background(Color(0xCC000000), shape = RoundedCornerShape(24.dp))
+                    .padding(horizontal = 24.dp, vertical = 12.dp)
+            ) {
+                Text(
+                    text = "Mood: $emotion",
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleLarge
+                )
+            }
+        }
 
         // Simple Face Detection indicator overlay
         val (text, bgColor) = if (faceBoundingBox != null) {

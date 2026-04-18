@@ -11,19 +11,25 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import com.example.moodsync.ml.EmotionClassifier
 
 class MoodViewModel(application: Application) : AndroidViewModel(application) {
     // Shared Preferences for Persistence
     private val prefs = application.getSharedPreferences("MoodSyncPrefs", Context.MODE_PRIVATE)
 
-    // ML Model
+    // ML Models
     private val faceNetModel = FaceNetModel(application)
+    private val emotionClassifier = EmotionClassifier(application)
 
     // Current Bounding Box and Cropped Face
     private val _faceBoundingBox = MutableStateFlow<Rect?>(null)
     val faceBoundingBox: StateFlow<Rect?> = _faceBoundingBox.asStateFlow()
 
     private var currentCroppedFace: Bitmap? = null
+
+    // Emotion State
+    private val _currentEmotion = MutableStateFlow<String?>(null)
+    val currentEmotion: StateFlow<String?> = _currentEmotion.asStateFlow()
 
     // Face Recognition State
     private var registeredEmbedding: FloatArray? = null
@@ -52,6 +58,14 @@ class MoodViewModel(application: Application) : AndroidViewModel(application) {
     fun updateFaceBoundingBox(rect: Rect?, faceBitmap: Bitmap?) {
         _faceBoundingBox.value = rect
         currentCroppedFace = faceBitmap
+        
+        // Continuously scan for emotion if a face is detected
+        faceBitmap?.let {
+            val emotion = emotionClassifier.analyzeEmotion(it)
+            _currentEmotion.value = emotion
+        } ?: run {
+            _currentEmotion.value = null
+        }
     }
 
     fun registerFace() {
@@ -126,5 +140,6 @@ class MoodViewModel(application: Application) : AndroidViewModel(application) {
     override fun onCleared() {
         super.onCleared()
         faceNetModel.close()
+        emotionClassifier.close()
     }
 }

@@ -35,10 +35,9 @@ class EmotionClassifier(context: Context) {
 
     fun analyzeEmotion(bitmap: Bitmap): String {
         if (isMockMode || interpreter == null) {
-            // MOCK MODE: Cycle through an emotion every 5 seconds to prevent rapid flickering
-            val timeMs = System.currentTimeMillis()
-            val index = ((timeMs / 5000) % 7).toInt()
-            return emotions[index]
+            // MOCK MODE: Return a static emotion to prevent rapid flickering
+            // which causes the Spotify App Remote to lag from spamming playlists.
+            return "Happy"
         }
 
         // REAL TFLITE INFERENCE:
@@ -67,21 +66,26 @@ class EmotionClassifier(context: Context) {
         // 3. Output buffer [1, 7]
         val outputBuffer = Array(1) { FloatArray(7) }
 
-        // 4. Run inference
-        interpreter?.run(inputBuffer, outputBuffer)
+        try {
+            // 4. Run inference
+            interpreter?.run(inputBuffer, outputBuffer)
 
-        // 5. Find highest probability
-        val probabilities = outputBuffer[0]
-        var maxIdx = 0
-        var maxProb = probabilities[0]
-        for (i in 1 until 7) {
-            if (probabilities[i] > maxProb) {
-                maxProb = probabilities[i]
-                maxIdx = i
+            // 5. Find highest probability
+            val probabilities = outputBuffer[0]
+            var maxIdx = 0
+            var maxProb = probabilities[0]
+            for (i in 1 until 7) {
+                if (probabilities[i] > maxProb) {
+                    maxProb = probabilities[i]
+                    maxIdx = i
+                }
             }
+            return emotions[maxIdx]
+        } catch (e: Exception) {
+            Log.e("EmotionClassifier", "TFLite inference failed! Falling back to MOCK mode.", e)
+            isMockMode = true
+            return emotions[0]
         }
-        
-        return emotions[maxIdx]
     }
 
     fun close() {

@@ -11,15 +11,18 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import com.spotify.sdk.android.auth.AuthorizationRequest
 import com.example.moodsync.ml.EmotionClassifier
 
 class MoodViewModel(application: Application) : AndroidViewModel(application) {
     // Shared Preferences for Persistence
     private val prefs = application.getSharedPreferences("MoodSyncPrefs", Context.MODE_PRIVATE)
 
-    // ML Models
+    // ML Models & Integrations
     private val faceNetModel = FaceNetModel(application)
     private val emotionClassifier = EmotionClassifier(application)
+    private val spotifyHelper = com.example.moodsync.spotify.SpotifyHelper()
 
     // Current Bounding Box and Cropped Face
     private val _faceBoundingBox = MutableStateFlow<Rect?>(null)
@@ -30,6 +33,13 @@ class MoodViewModel(application: Application) : AndroidViewModel(application) {
     // Emotion State
     private val _currentEmotion = MutableStateFlow<String?>(null)
     val currentEmotion: StateFlow<String?> = _currentEmotion.asStateFlow()
+
+    // Spotify Track State
+    private val _currentTrack = MutableStateFlow<String?>("Not Connected")
+    val currentTrack: StateFlow<String?> = _currentTrack.asStateFlow()
+
+    private val _currentTrackImage = MutableStateFlow<android.graphics.Bitmap?>(null)
+    val currentTrackImage: StateFlow<android.graphics.Bitmap?> = _currentTrackImage.asStateFlow()
 
     // Face Recognition State
     private var registeredEmbedding: FloatArray? = null
@@ -55,16 +65,70 @@ class MoodViewModel(application: Application) : AndroidViewModel(application) {
     private val _verificationMessage = MutableStateFlow<String?>(null)
     val verificationMessage: StateFlow<String?> = _verificationMessage.asStateFlow()
 
+    fun getSpotifyAuthRequest(): AuthorizationRequest {
+        return spotifyHelper.getAuthRequest()
+    }
+
+    fun connectToSpotify(context: Context) {
+        // Only connect if we haven't already (allow retries if it failed previously)
+        if (_currentTrack.value != "Connecting to Spotify...") {
+            _currentTrack.value = "Connecting to Spotify..."
+            
+            // Timeout failsafe for Android 15 background service blocking
+            viewModelScope.launch {
+                delay(8000)
+                if (_currentTrack.value == "Connecting to Spotify...") {
+                    _currentTrack.value = "Failed: Spotify App blocked connection (Open Spotify manually to wake it up)"
+                }
+            }
+
+            spotifyHelper.connect(
+                context = context,
+                onConnected = {
+                    // Start playing based on current emotion if available
+                    currentEmotion.value?.let { spotifyHelper.playPlaylistForEmotion(it) }
+                },
+                onTrackChanged = { trackName, trackImage ->
+                    _currentTrack.value = trackName
+                    _currentTrackImage.value = trackImage
+                },
+                onFailure = { error ->
+                    _currentTrack.value = "Failed: $error"
+                }
+            )
+        }
+    }
+
+    private val _isEmotionFrozen = MutableStateFlow(false)
+    val isEmotionFrozen: StateFlow<Boolean> = _isEmotionFrozen.asStateFlow()
+
+    fun toggleEmotionFreeze() {
+        _isEmotionFrozen.value = !_isEmotionFrozen.value
+    }
+
+    fun skipNextTrack() {
+        spotifyHelper.skipNext()
+    }
+
     fun updateFaceBoundingBox(rect: Rect?, faceBitmap: Bitmap?) {
         _faceBoundingBox.value = rect
         currentCroppedFace = faceBitmap
         
-        // Continuously scan for emotion if a face is detected
+        // Continuously scan for emotion if a face is detected and NOT frozen
         faceBitmap?.let {
-            val emotion = emotionClassifier.analyzeEmotion(it)
-            _currentEmotion.value = emotion
+            if (!_isEmotionFrozen.value) {
+                val emotion = emotionClassifier.analyzeEmotion(it)
+                _currentEmotion.value = emotion
+                
+                // If unlocked (in Gallery), trigger Spotify
+                if (_isUnlocked.value) {
+                    spotifyHelper.playPlaylistForEmotion(emotion)
+                }
+            }
         } ?: run {
-            _currentEmotion.value = null
+            if (!_isEmotionFrozen.value) {
+                _currentEmotion.value = null
+            }
         }
     }
 
@@ -141,5 +205,6 @@ class MoodViewModel(application: Application) : AndroidViewModel(application) {
         super.onCleared()
         faceNetModel.close()
         emotionClassifier.close()
+        spotifyHelper.disconnect()
     }
 }

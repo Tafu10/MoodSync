@@ -44,6 +44,7 @@ fun MoodSyncNavigation() {
 
         composable(Routes.GALLERY_SCREEN) {
             PrivateGalleryScreen(
+                viewModel = moodViewModel,
                 onNavigateBack = {
                     moodViewModel.lockGallery()
                     navController.popBackStack()

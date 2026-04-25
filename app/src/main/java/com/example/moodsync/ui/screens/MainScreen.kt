@@ -40,6 +40,17 @@ fun MainScreen(
     val verificationMessage by viewModel.verificationMessage.collectAsState()
     val currentEmotion by viewModel.currentEmotion.collectAsState()
     val context = LocalContext.current
+    val activity = context as? android.app.Activity
+
+    val authLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val response = com.spotify.sdk.android.auth.AuthorizationClient.getResponse(result.resultCode, result.data)
+        if (response.type == com.spotify.sdk.android.auth.AuthorizationResponse.Type.TOKEN) {
+            viewModel.spotifyAccessToken = response.accessToken
+            android.util.Log.d("SpotifyAuth", "Got token: ${response.accessToken}")
+        }
+    }
 
     val faceAnalyzer = remember {
         FaceAnalyzer { rect, bitmap ->
@@ -91,6 +102,26 @@ fun MainScreen(
                 color = Color.White,
                 style = MaterialTheme.typography.titleLarge
             )
+        }
+
+        // Web API Login Button
+        if (viewModel.spotifyAccessToken == null && isUnlocked) {
+            Button(
+                onClick = {
+                    val intent = com.spotify.sdk.android.auth.AuthorizationClient.createLoginActivityIntent(
+                        activity,
+                        viewModel.getSpotifyAuthRequest()
+                    )
+                    authLauncher.launch(intent)
+                },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(16.dp)
+                    .padding(top = 32.dp),
+                colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0xFF1DB954))
+            ) {
+                Text("Link Spotify API")
+            }
         }
 
         // Custom Face ID Buttons

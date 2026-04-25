@@ -49,6 +49,8 @@ class MoodViewModel(application: Application) : AndroidViewModel(application) {
     private val _currentTrackImage = MutableStateFlow<android.graphics.Bitmap?>(null)
     val currentTrackImage: StateFlow<android.graphics.Bitmap?> = _currentTrackImage.asStateFlow()
 
+    var spotifyAccessToken: String? = null
+
     private val _currentTrackUri = MutableStateFlow<String?>("spotify:track:7ouMYWcgJqo60a2vKkM7tT") // default fallback
     val currentTrackUri: StateFlow<String?> = _currentTrackUri.asStateFlow()
 
@@ -352,16 +354,20 @@ class MoodViewModel(application: Application) : AndroidViewModel(application) {
             ContextCompat.getMainExecutor(context),
             object : androidx.camera.core.ImageCapture.OnImageSavedCallback {
                 override fun onImageSaved(output: androidx.camera.core.ImageCapture.OutputFileResults) {
-                    val metadataFile = File(photoFile.parent, "${photoFile.nameWithoutExtension}.json")
-                    
-                    // Assign a specific track to this exact photo permanently!
-                    val trackData = getRandomTrackForMood(mood)
-                    val trackName = trackData.first
-                    val trackUri = trackData.second
-                    
-                    metadataFile.writeText("{\"mood\": \"$mood\", \"songUri\": \"$trackUri\", \"songName\": \"$trackName\"}")
-                    _photoRefreshTrigger.value += 1
-                    onComplete("Saved to $activeProfile's $mood collection!")
+                    viewModelScope.launch {
+                        val metadataFile = File(photoFile.parent, "${photoFile.nameWithoutExtension}.json")
+                        
+                        // Try to get dynamic track from Web API, fallback to hardcoded list
+                        val webApiClient = com.example.moodsync.spotify.SpotifyWebApiClient()
+                        val dynamicTrack = webApiClient.getRandomTrackForMood(spotifyAccessToken, mood)
+                        
+                        val trackName = dynamicTrack?.first ?: getRandomTrackForMood(mood).first
+                        val trackUri = dynamicTrack?.second ?: getRandomTrackForMood(mood).second
+                        
+                        metadataFile.writeText("{\"mood\": \"$mood\", \"songUri\": \"$trackUri\", \"songName\": \"$trackName\"}")
+                        _photoRefreshTrigger.value += 1
+                        onComplete("Saved to $activeProfile's $mood collection!")
+                    }
                 }
 
                 override fun onError(exc: androidx.camera.core.ImageCaptureException) {

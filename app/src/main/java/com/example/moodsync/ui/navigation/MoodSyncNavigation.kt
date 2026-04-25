@@ -7,13 +7,15 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.moodsync.ui.screens.MainScreen
 import com.example.moodsync.ui.screens.PermissionScreen
-import com.example.moodsync.ui.screens.PrivateGalleryScreen
+import com.example.moodsync.ui.screens.DashboardScreen
+import com.example.moodsync.ui.screens.PhotoViewerScreen
 import com.example.moodsync.viewmodel.MoodViewModel
 
 object Routes {
     const val PERMISSION_SCREEN = "permission_screen"
     const val MAIN_SCREEN = "main_screen"
-    const val GALLERY_SCREEN = "gallery_screen"
+    const val DASHBOARD_SCREEN = "dashboard_screen"
+    const val PHOTO_VIEWER = "photo_viewer/{photoPath}"
 }
 
 @Composable
@@ -37,21 +39,32 @@ fun MoodSyncNavigation() {
             MainScreen(
                 viewModel = moodViewModel,
                 onNavigateToGallery = {
-                    navController.navigate(Routes.GALLERY_SCREEN)
+                    navController.navigate(Routes.DASHBOARD_SCREEN)
                 }
             )
         }
 
-        composable(Routes.GALLERY_SCREEN) {
-            PrivateGalleryScreen(
+        composable(Routes.DASHBOARD_SCREEN) {
+            DashboardScreen(
                 viewModel = moodViewModel,
                 onNavigateBack = {
                     moodViewModel.lockGallery()
                     navController.popBackStack()
                 },
-                onClearFace = {
-                    moodViewModel.clearRegisteredFace()
+                onPhotoSelected = { photoPath ->
+                    val encodedPath = java.net.URLEncoder.encode(photoPath, "UTF-8")
+                    navController.navigate("photo_viewer/\$encodedPath")
                 }
+            )
+        }
+
+        composable("photo_viewer/{photoPath}") { backStackEntry ->
+            val encodedPath = backStackEntry.arguments?.getString("photoPath") ?: ""
+            val photoPath = java.net.URLDecoder.decode(encodedPath, "UTF-8")
+            PhotoViewerScreen(
+                photoPath = photoPath,
+                viewModel = moodViewModel,
+                onNavigateBack = { navController.popBackStack() }
             )
         }
     }

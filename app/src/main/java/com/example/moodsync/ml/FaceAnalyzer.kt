@@ -11,12 +11,17 @@ import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.face.FaceDetection
 import com.google.mlkit.vision.face.FaceDetectorOptions
 
+import com.google.mlkit.vision.face.Face
+
 class FaceAnalyzer(
-    private val onFaceDetected: (Rect?, Bitmap?) -> Unit
+    private val onFaceDetected: (Face?, Bitmap?) -> Unit
 ) : ImageAnalysis.Analyzer {
 
     private val options = FaceDetectorOptions.Builder()
         .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
+        .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_ALL)
+        .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_ALL)
+        .setContourMode(FaceDetectorOptions.CONTOUR_MODE_ALL)
         .build()
 
     private val detector = FaceDetection.getClient(options)
@@ -50,7 +55,7 @@ class FaceAnalyzer(
                             croppedFace = Bitmap.createBitmap(rotatedBitmap, left, top, width, height)
                         }
 
-                        onFaceDetected(rect, croppedFace)
+                        onFaceDetected(face, croppedFace)
                     } else {
                         onFaceDetected(null, null)
                     }

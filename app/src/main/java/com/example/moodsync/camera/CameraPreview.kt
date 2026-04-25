@@ -23,13 +23,13 @@ import java.util.concurrent.Executors
 @Composable
 fun CameraPreview(
     modifier: Modifier = Modifier,
-    analyzer: ImageAnalysis.Analyzer? = null
+    analyzer: ImageAnalysis.Analyzer? = null,
+    onImageCaptureReady: ((androidx.camera.core.ImageCapture) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
     
-    // We create a background executor for ImageAnalysis to not block the main thread
     val cameraExecutor: ExecutorService = remember { Executors.newSingleThreadExecutor() }
 
     AndroidView(
@@ -45,37 +45,34 @@ fun CameraPreview(
             cameraProviderFuture.addListener({
                 val cameraProvider = cameraProviderFuture.get()
 
-                // Preview Use Case
-                val preview = Preview.Builder()
-                    .build()
-                    .also {
-                        it.setSurfaceProvider(previewView.surfaceProvider)
-                    }
+                val preview = Preview.Builder().build().also {
+                    it.setSurfaceProvider(previewView.surfaceProvider)
+                }
 
-                // ImageAnalysis Use Case
                 val imageAnalyzer = ImageAnalysis.Builder()
-                    // Drop frames if processing is too slow
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                     .build()
                     .also { analysis ->
-                        analyzer?.let {
-                            analysis.setAnalyzer(cameraExecutor, it)
-                        }
+                        analyzer?.let { analysis.setAnalyzer(cameraExecutor, it) }
                     }
 
-                // Select front camera as a default for emotion detection
+                // High-resolution ImageCapture Use Case for Mood Photos
+                val imageCapture = androidx.camera.core.ImageCapture.Builder()
+                    .setCaptureMode(androidx.camera.core.ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                    .build()
+
+                onImageCaptureReady?.invoke(imageCapture)
+
                 val cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA
 
                 try {
-                    // Unbind use cases before rebinding
                     cameraProvider.unbindAll()
-
-                    // Bind use cases to camera lifecycle
                     cameraProvider.bindToLifecycle(
                         lifecycleOwner,
                         cameraSelector,
                         preview,
-                        imageAnalyzer
+                        imageAnalyzer,
+                        imageCapture
                     )
                 } catch (exc: Exception) {
                     Log.e("CameraPreview", "Use case binding failed", exc)

@@ -49,6 +49,7 @@ fun MainScreen(
 
     LaunchedEffect(isUnlocked) {
         if (isUnlocked) {
+            viewModel.connectToSpotify(context)
             onNavigateToGallery()
         }
     }
@@ -69,22 +70,7 @@ fun MainScreen(
             analyzer = faceAnalyzer
         )
 
-        // Emotion Badge (Top Center)
-        currentEmotion?.let { emotion ->
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 48.dp)
-                    .background(Color(0xCC000000), shape = RoundedCornerShape(24.dp))
-                    .padding(horizontal = 24.dp, vertical = 12.dp)
-            ) {
-                Text(
-                    text = "Mood: $emotion",
-                    color = Color.White,
-                    style = MaterialTheme.typography.titleLarge
-                )
-            }
-        }
+        // Emotion Badge removed for privacy and performance on Lock Screen
 
         // Simple Face Detection indicator overlay
         val (text, bgColor) = if (faceBoundingBox != null) {

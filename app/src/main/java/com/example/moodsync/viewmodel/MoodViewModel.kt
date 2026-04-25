@@ -13,7 +13,15 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import com.spotify.sdk.android.auth.AuthorizationRequest
-import com.example.moodsync.ml.EmotionClassifier
+import com.google.mlkit.vision.face.Face
+import com.example.moodsync.ml.HeuristicEmotionEngine
+import java.io.File
+import androidx.core.content.ContextCompat
+
+sealed class CalibrationDialogState {
+    data class Recognized(val name: String) : CalibrationDialogState()
+    data class NotRecognized(val embedding: FloatArray) : CalibrationDialogState()
+}
 
 class MoodViewModel(application: Application) : AndroidViewModel(application) {
     // Shared Preferences for Persistence
@@ -21,7 +29,7 @@ class MoodViewModel(application: Application) : AndroidViewModel(application) {
 
     // ML Models & Integrations
     private val faceNetModel = FaceNetModel(application)
-    private val emotionClassifier = EmotionClassifier(application)
+    private val heuristicEngine = HeuristicEmotionEngine()
     private val spotifyHelper = com.example.moodsync.spotify.SpotifyHelper()
 
     // Current Bounding Box and Cropped Face
@@ -41,23 +49,77 @@ class MoodViewModel(application: Application) : AndroidViewModel(application) {
     private val _currentTrackImage = MutableStateFlow<android.graphics.Bitmap?>(null)
     val currentTrackImage: StateFlow<android.graphics.Bitmap?> = _currentTrackImage.asStateFlow()
 
+    private val _currentTrackUri = MutableStateFlow<String?>("spotify:track:7ouMYWcgJqo60a2vKkM7tT") // default fallback
+    val currentTrackUri: StateFlow<String?> = _currentTrackUri.asStateFlow()
+
     // Face Recognition State
     private var registeredEmbedding: FloatArray? = null
     
     private val _isRegistered = MutableStateFlow(false)
     val isRegistered: StateFlow<Boolean> = _isRegistered.asStateFlow()
 
+    // Multi-User Collections State
+    private val collectionProfiles = mutableMapOf<String, FloatArray>()
+    
+    private val _activeCollectionSubject = MutableStateFlow<String?>(null)
+    val activeCollectionSubject: StateFlow<String?> = _activeCollectionSubject.asStateFlow()
+
+    private val _photoRefreshTrigger = MutableStateFlow(0)
+    val photoRefreshTrigger: StateFlow<Int> = _photoRefreshTrigger.asStateFlow()
+
+    private val _calibrationDialogState = MutableStateFlow<CalibrationDialogState?>(null)
+    val calibrationDialogState: StateFlow<CalibrationDialogState?> = _calibrationDialogState.asStateFlow()
+
     init {
-        // Load the saved face signature if it exists
+        // Load the saved App Owner face signature
         val savedFace = prefs.getString("registered_face", null)
         if (savedFace != null) {
             registeredEmbedding = savedFace.split(",").map { it.toFloat() }.toFloatArray()
             _isRegistered.value = true
         }
+
+        // Load Collection Profiles
+        val savedProfiles = prefs.getStringSet("collection_profiles", null)
+        savedProfiles?.forEach { entry ->
+            val parts = entry.split(":")
+            if (parts.size == 2) {
+                val name = parts[0]
+                val embedding = parts[1].split(",").map { it.toFloat() }.toFloatArray()
+                collectionProfiles[name] = embedding
+            }
+        }
     }
 
     private val _isUnlocked = MutableStateFlow(false)
     val isUnlocked: StateFlow<Boolean> = _isUnlocked.asStateFlow()
+
+    private val _isCalibrated = MutableStateFlow(false)
+    val isCalibrated: StateFlow<Boolean> = _isCalibrated.asStateFlow()
+    
+    private var shouldCalibrateOnNextFrame = false
+
+    fun calibrateEmotionBaseline() {
+        shouldCalibrateOnNextFrame = true
+    }
+
+    fun confirmCollectionSubject(name: String) {
+        _activeCollectionSubject.value = name
+        _calibrationDialogState.value = null
+    }
+
+    fun createNewCollectionProfile(name: String, embedding: FloatArray) {
+        collectionProfiles[name] = embedding
+        _activeCollectionSubject.value = name
+        _calibrationDialogState.value = null
+
+        // Save to SharedPreferences
+        val serializedProfiles = collectionProfiles.map { it.key + ":" + it.value.joinToString(",") }.toSet()
+        prefs.edit().putStringSet("collection_profiles", serializedProfiles).apply()
+    }
+
+    fun dismissCalibrationDialog() {
+        _calibrationDialogState.value = null
+    }
 
     private val _isVerifying = MutableStateFlow(false)
     val isVerifying: StateFlow<Boolean> = _isVerifying.asStateFlow()
@@ -85,18 +147,24 @@ class MoodViewModel(application: Application) : AndroidViewModel(application) {
             spotifyHelper.connect(
                 context = context,
                 onConnected = {
-                    // Start playing based on current emotion if available
-                    currentEmotion.value?.let { spotifyHelper.playPlaylistForEmotion(it) }
+                    // We no longer auto-play music on the camera screen!
+                    // Music will only play when viewing a specific photo in the Collections viewer.
                 },
                 onTrackChanged = { trackName, trackImage ->
                     _currentTrack.value = trackName
                     _currentTrackImage.value = trackImage
+                    // Currently Spotify App Remote doesn't easily expose full URI on every track change without heavy callback setup,
+                    // so we'll just save a placeholder if we can't get it.
                 },
                 onFailure = { error ->
                     _currentTrack.value = "Failed: $error"
                 }
             )
         }
+    }
+
+    fun playSpotifyUri(uri: String) {
+        spotifyHelper.playUri(uri)
     }
 
     private val _isEmotionFrozen = MutableStateFlow(false)
@@ -110,25 +178,57 @@ class MoodViewModel(application: Application) : AndroidViewModel(application) {
         spotifyHelper.skipNext()
     }
 
-    fun updateFaceBoundingBox(rect: Rect?, faceBitmap: Bitmap?) {
-        _faceBoundingBox.value = rect
+    fun updateFaceBoundingBox(face: Face?, faceBitmap: Bitmap?) {
+        _faceBoundingBox.value = face?.boundingBox
         currentCroppedFace = faceBitmap
         
-        // Continuously scan for emotion if a face is detected and NOT frozen
-        faceBitmap?.let {
+        if (face != null) {
+            if (shouldCalibrateOnNextFrame) {
+                heuristicEngine.calibrate(face)
+                shouldCalibrateOnNextFrame = false
+                _isCalibrated.value = true
+
+                // Also run FaceNet verification for Collections
+                currentCroppedFace?.let { bitmap ->
+                    viewModelScope.launch {
+                        try {
+                            val liveEmbedding = faceNetModel.getFaceEmbedding(bitmap)
+                            var bestMatchName: String? = null
+                            var bestMatchDistance = Float.MAX_VALUE
+
+                            // Find the closest registered profile
+                            for ((name, targetEmbedding) in collectionProfiles) {
+                                val distance = faceNetModel.calculateDistance(liveEmbedding, targetEmbedding)
+                                if (distance < 1.0f && distance < bestMatchDistance) {
+                                    bestMatchDistance = distance
+                                    bestMatchName = name
+                                }
+                            }
+
+                            if (bestMatchName != null) {
+                                _calibrationDialogState.value = CalibrationDialogState.Recognized(bestMatchName)
+                            } else {
+                                _calibrationDialogState.value = CalibrationDialogState.NotRecognized(liveEmbedding)
+                            }
+                        } catch (e: Exception) {
+                            // Ignored or logged
+                        }
+                    }
+                }
+            }
+
+            // Continuously scan for emotion if a face is detected and NOT frozen
             if (!_isEmotionFrozen.value) {
-                val emotion = emotionClassifier.analyzeEmotion(it)
+                val emotion = heuristicEngine.analyzeEmotion(face)
                 _currentEmotion.value = emotion
                 
                 // If unlocked (in Gallery), trigger Spotify
                 if (_isUnlocked.value) {
-                    spotifyHelper.playPlaylistForEmotion(emotion)
+                    // spotifyHelper.playPlaylistForEmotion(emotion) // Temporarily Disabled
                 }
             }
-        } ?: run {
-            if (!_isEmotionFrozen.value) {
-                _currentEmotion.value = null
-            }
+        } else if (!_isEmotionFrozen.value) {
+            _currentEmotion.value = null
         }
     }
 
@@ -193,6 +293,33 @@ class MoodViewModel(application: Application) : AndroidViewModel(application) {
         _verificationMessage.value = null
     }
 
+    fun captureMoodPhoto(context: Context, imageCapture: androidx.camera.core.ImageCapture, mood: String, onComplete: (String) -> Unit) {
+        val activeProfile = _activeCollectionSubject.value ?: "Unknown"
+        val profileDir = File(context.filesDir, "MoodSync/$activeProfile/$mood")
+        if (!profileDir.exists()) profileDir.mkdirs()
+
+        val photoFile = File(profileDir, "IMG_${System.currentTimeMillis()}.jpg")
+        val outputOptions = androidx.camera.core.ImageCapture.OutputFileOptions.Builder(photoFile).build()
+
+        imageCapture.takePicture(
+            outputOptions,
+            ContextCompat.getMainExecutor(context),
+            object : androidx.camera.core.ImageCapture.OnImageSavedCallback {
+                override fun onImageSaved(output: androidx.camera.core.ImageCapture.OutputFileResults) {
+                    val metadataFile = File(photoFile.parent, "${photoFile.nameWithoutExtension}.json")
+                    val trackUri = _currentTrackUri.value ?: "spotify:track:4cOdK2wGLETKBW3PvgPWqT" // Never Gonna Give You Up fallback
+                    metadataFile.writeText("{\"mood\": \"$mood\", \"songUri\": \"$trackUri\"}")
+                    _photoRefreshTrigger.value += 1
+                    onComplete("Saved to $activeProfile's $mood collection!")
+                }
+
+                override fun onError(exc: androidx.camera.core.ImageCaptureException) {
+                    onComplete("Failed to save photo: ${exc.message}")
+                }
+            }
+        )
+    }
+
     fun clearRegisteredFace() {
         registeredEmbedding = null
         prefs.edit().remove("registered_face").apply()
@@ -204,7 +331,6 @@ class MoodViewModel(application: Application) : AndroidViewModel(application) {
     override fun onCleared() {
         super.onCleared()
         faceNetModel.close()
-        emotionClassifier.close()
         spotifyHelper.disconnect()
     }
 }

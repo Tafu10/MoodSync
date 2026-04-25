@@ -121,6 +121,15 @@ class SpotifyHelper {
         }
     }
 
+    fun playUri(uri: String) {
+        spotifyAppRemote?.let {
+            it.playerApi.play(uri)
+            Log.d("SpotifyHelper", "Playing specific URI: \$uri")
+        } ?: run {
+            Log.w("SpotifyHelper", "Tried to play URI, but Spotify is not connected.")
+        }
+    }
+
     fun skipNext() {
         spotifyAppRemote?.let {
             it.playerApi.skipNext()

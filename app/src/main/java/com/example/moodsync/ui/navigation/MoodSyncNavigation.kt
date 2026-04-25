@@ -53,7 +53,7 @@ fun MoodSyncNavigation() {
                 },
                 onPhotoSelected = { photoPath ->
                     val encodedPath = java.net.URLEncoder.encode(photoPath, "UTF-8")
-                    navController.navigate("photo_viewer/\$encodedPath")
+                    navController.navigate("photo_viewer/$encodedPath")
                 }
             )
         }

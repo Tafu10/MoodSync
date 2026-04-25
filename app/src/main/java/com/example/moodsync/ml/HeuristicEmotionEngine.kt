@@ -127,8 +127,8 @@ class HeuristicEmotionEngine {
                 val distanceDrop = baseline!!.neutralEyebrowDistanceRatio - eyebrowDistanceRatio
                 val heightDrop = baseline!!.neutralEyebrowRaise - eyebrowRaise
                 
-                // Increased thresholds for anger to make it much harder to trigger (less sensitive)
-                (distanceDrop > 0.004f || heightDrop > 0.009f) && smileProb < 0.45f
+                // Absolute middle ground for anger thresholds (tiny bit more sensitive)
+                (distanceDrop > 0.0046f || heightDrop > 0.0105f) && smileProb < 0.45f
             } else {
                 eyebrowDistanceRatio < 0.25f && smileProb < 0.45f
             }

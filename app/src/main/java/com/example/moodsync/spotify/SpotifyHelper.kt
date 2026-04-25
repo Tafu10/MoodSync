@@ -37,7 +37,7 @@ class SpotifyHelper {
 
         val connectionParams = ConnectionParams.Builder(clientId)
             .setRedirectUri(redirectUri)
-            .showAuthView(false) // Crucial: Disable built-in auth to prevent Android 15 IPC crash
+            .showAuthView(true) // Enable auth view to explicitly wake up Spotify and ask for permission
             .build()
 
         SpotifyAppRemote.connect(context, connectionParams, object : Connector.ConnectionListener {
@@ -68,7 +68,7 @@ class SpotifyHelper {
         })
     }
 
-    fun playPlaylistForEmotion(emotion: String?) {
+    fun playPlaylistForEmotion(context: Context, emotion: String?) {
         if (emotion == null || emotion == lastPlayedEmotion) return
 
         // A curated, randomized list of highly popular official Spotify playlists 
@@ -111,22 +111,42 @@ class SpotifyHelper {
             ).random()
         }
         
-        // Only play if connected
-        spotifyAppRemote?.let {
-            it.playerApi.play(playlistUri)
+        if (spotifyAppRemote != null && spotifyAppRemote!!.isConnected) {
+            spotifyAppRemote!!.playerApi.play(playlistUri)
             lastPlayedEmotion = emotion
             Log.d("SpotifyHelper", "Playing playlist for emotion: $emotion")
-        } ?: run {
-            Log.w("SpotifyHelper", "Tried to play, but Spotify is not connected.")
+        } else {
+            Log.w("SpotifyHelper", "Spotify not connected. Attempting to connect before playing playlist...")
+            connect(context,
+                onConnected = {
+                    spotifyAppRemote?.playerApi?.play(playlistUri)
+                    lastPlayedEmotion = emotion
+                    Log.d("SpotifyHelper", "Playing playlist after reconnect for emotion: $emotion")
+                },
+                onTrackChanged = { _, _ -> },
+                onFailure = { Log.e("SpotifyHelper", "Failed to connect to play playlist") }
+            )
         }
     }
 
-    fun playUri(uri: String) {
-        spotifyAppRemote?.let {
-            it.playerApi.play(uri)
-            Log.d("SpotifyHelper", "Playing specific URI: \$uri")
-        } ?: run {
-            Log.w("SpotifyHelper", "Tried to play URI, but Spotify is not connected.")
+    fun playUri(context: Context, uri: String) {
+        if (spotifyAppRemote != null && spotifyAppRemote!!.isConnected) {
+            spotifyAppRemote!!.playerApi.play(uri).setResultCallback {
+                spotifyAppRemote!!.playerApi.resume()
+            }
+            Log.d("SpotifyHelper", "Playing specific URI: $uri")
+        } else {
+            Log.w("SpotifyHelper", "Spotify not connected. Attempting to connect before playing URI...")
+            connect(context,
+                onConnected = {
+                    spotifyAppRemote?.playerApi?.play(uri)?.setResultCallback {
+                        spotifyAppRemote?.playerApi?.resume()
+                    }
+                    Log.d("SpotifyHelper", "Playing specific URI after reconnect: $uri")
+                },
+                onTrackChanged = { _, _ -> },
+                onFailure = { Log.e("SpotifyHelper", "Failed to connect to play URI") }
+            )
         }
     }
 
@@ -139,8 +159,16 @@ class SpotifyHelper {
         }
     }
 
+    fun pause() {
+        spotifyAppRemote?.let {
+            it.playerApi.pause()
+            Log.d("SpotifyHelper", "Paused Spotify playback.")
+        }
+    }
+
     fun disconnect() {
         spotifyAppRemote?.let {
+            it.playerApi.pause() // Stop music when disconnecting
             SpotifyAppRemote.disconnect(it)
             spotifyAppRemote = null
             lastPlayedEmotion = null

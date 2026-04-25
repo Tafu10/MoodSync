@@ -83,6 +83,9 @@ dependencies {
     // Navigation Compose
     implementation(libs.androidx.navigation.compose)
 
+    // Coil for Image Loading (handles EXIF rotation and caching)
+    implementation("io.coil-kt:coil-compose:2.6.0")
+
     // Biometrics
     implementation(libs.androidx.biometric)
 

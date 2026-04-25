@@ -148,7 +148,10 @@ class MoodViewModel(application: Application) : AndroidViewModel(application) {
                 context = context,
                 onConnected = {
                     // We no longer auto-play music on the camera screen!
-                    // Music will only play when viewing a specific photo in the Collections viewer.
+                    // Update _currentTrack so the 8-second timeout doesn't incorrectly mark it as failed.
+                    if (_currentTrack.value == "Connecting to Spotify...") {
+                        _currentTrack.value = "Ready to Play"
+                    }
                 },
                 onTrackChanged = { trackName, trackImage ->
                     _currentTrack.value = trackName
@@ -163,8 +166,16 @@ class MoodViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun playSpotifyUri(uri: String) {
-        spotifyHelper.playUri(uri)
+    fun playSpotifyUri(context: Context, uri: String) {
+        spotifyHelper.playUri(context, uri)
+    }
+
+    fun playMoodPlaylist(context: Context, mood: String) {
+        spotifyHelper.playPlaylistForEmotion(context, mood)
+    }
+
+    fun pauseSpotify() {
+        spotifyHelper.pause()
     }
 
     private val _isEmotionFrozen = MutableStateFlow(false)
@@ -293,6 +304,34 @@ class MoodViewModel(application: Application) : AndroidViewModel(application) {
         _verificationMessage.value = null
     }
 
+    private fun getRandomTrackForMood(mood: String): Pair<String, String> {
+        val tracks = when (mood) {
+            "Happy" -> listOf(
+                "Happy by Pharrell" to "spotify:track:60nZcImGkarXZe4Y1Q9Z4o",
+                "Don't Stop Me Now by Queen" to "spotify:track:5T8EDUDqKcs6OSWevUgQvY",
+                "Walking On Sunshine by Katrina" to "spotify:track:05wIrZSwNlOUc9q4x4m3zT"
+            )
+            "Sad" -> listOf(
+                "Someone Like You by Adele" to "spotify:track:1zwMYTA5nlNjZxYrvBB2pV",
+                "Fix You by Coldplay" to "spotify:track:47EWMOElkkbMp5m9SBkx7d",
+                "Let Her Go by Passenger" to "spotify:track:1KzwqmV0rU1B9iZqY8T3eH"
+            )
+            "Surprise" -> listOf(
+                "Uptown Funk by Mark Ronson" to "spotify:track:32OlwWuMpZ6b0aN2RZOeMS",
+                "Bad Guy by Billie Eilish" to "spotify:track:2Fxmhks0bxGSBdJ92vM42m"
+            )
+            "Angry" -> listOf(
+                "Break Stuff by Limp Bizkit" to "spotify:track:5cZqsjVs6MevCnAkasbEOX",
+                "Killing In The Name by RATM" to "spotify:track:59WN2psjkt1tyaxjnVbbK0"
+            )
+            else -> listOf(
+                "Weightless by Marconi Union" to "spotify:track:6kkwzB6hXLIONkEk9JciA6",
+                "Clair de Lune by Debussy" to "spotify:track:6kf1h2AtoQW888r9x03q9L"
+            )
+        }
+        return tracks.random()
+    }
+
     fun captureMoodPhoto(context: Context, imageCapture: androidx.camera.core.ImageCapture, mood: String, onComplete: (String) -> Unit) {
         val activeProfile = _activeCollectionSubject.value ?: "Unknown"
         val profileDir = File(context.filesDir, "MoodSync/$activeProfile/$mood")
@@ -307,8 +346,13 @@ class MoodViewModel(application: Application) : AndroidViewModel(application) {
             object : androidx.camera.core.ImageCapture.OnImageSavedCallback {
                 override fun onImageSaved(output: androidx.camera.core.ImageCapture.OutputFileResults) {
                     val metadataFile = File(photoFile.parent, "${photoFile.nameWithoutExtension}.json")
-                    val trackUri = _currentTrackUri.value ?: "spotify:track:4cOdK2wGLETKBW3PvgPWqT" // Never Gonna Give You Up fallback
-                    metadataFile.writeText("{\"mood\": \"$mood\", \"songUri\": \"$trackUri\"}")
+                    
+                    // Assign a specific track to this exact photo permanently!
+                    val trackData = getRandomTrackForMood(mood)
+                    val trackName = trackData.first
+                    val trackUri = trackData.second
+                    
+                    metadataFile.writeText("{\"mood\": \"$mood\", \"songUri\": \"$trackUri\", \"songName\": \"$trackName\"}")
                     _photoRefreshTrigger.value += 1
                     onComplete("Saved to $activeProfile's $mood collection!")
                 }

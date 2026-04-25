@@ -28,6 +28,7 @@ fun CollectionsScreen(
     val context = LocalContext.current
     
     var groupedPhotos by remember { mutableStateOf<Map<String, List<File>>>(emptyMap()) }
+    var photoToDelete by remember { mutableStateOf<File?>(null) }
 
     LaunchedEffect(activeProfile, refreshTrigger) {
         val profile = activeProfile
@@ -86,12 +87,12 @@ fun CollectionsScreen(
                         ) {
                             items(photos) { photoFile ->
                                 val overlayColor = when (mood) {
-                                    "Happy" -> Color(0x66FFC107) // Warm Golden
-                                    "Sad" -> Color(0x662196F3) // Cool Blue
-                                    "Surprise" -> Color(0x66E91E63) // Vibrant Pink/Purple
-                                    "Angry" -> Color(0x66F44336) // Red
-                                    "Fear" -> Color(0x669C27B0) // Deep Purple
-                                    "Disgust" -> Color(0x664CAF50) // Sickly Green
+                                    "Happy" -> Color(0x66FFC107)
+                                    "Sad" -> Color(0x662196F3)
+                                    "Surprise" -> Color(0x66E91E63)
+                                    "Angry" -> Color(0x66F44336)
+                                    "Fear" -> Color(0x669C27B0)
+                                    "Disgust" -> Color(0x664CAF50)
                                     else -> Color.Transparent
                                 }
                                 Box(modifier = Modifier
@@ -105,12 +106,55 @@ fun CollectionsScreen(
                                         modifier = Modifier.fillMaxSize()
                                     )
                                     Box(modifier = Modifier.fillMaxSize().background(overlayColor))
+                                    
+                                    // Delete "X" Button
+                                    IconButton(
+                                        onClick = { photoToDelete = photoFile },
+                                        modifier = Modifier
+                                            .align(Alignment.TopEnd)
+                                            .padding(4.dp)
+                                            .size(24.dp)
+                                            .background(Color(0x80000000), shape = androidx.compose.foundation.shape.CircleShape)
+                                    ) {
+                                        Text(
+                                            text = "X",
+                                            color = Color.White,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
                 }
             }
+        }
+        
+        // Delete Confirmation Dialog
+        if (photoToDelete != null) {
+            AlertDialog(
+                onDismissRequest = { photoToDelete = null },
+                title = { Text("Delete Photo?") },
+                text = { Text("Are you sure you want to permanently delete this photo and its linked song?") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            photoToDelete?.let { file ->
+                                viewModel.deletePhoto(file.absolutePath)
+                            }
+                            photoToDelete = null
+                        }
+                    ) {
+                        Text("Delete", color = Color.Red)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { photoToDelete = null }) {
+                        Text("Cancel")
+                    }
+                }
+            )
         }
     }
 }

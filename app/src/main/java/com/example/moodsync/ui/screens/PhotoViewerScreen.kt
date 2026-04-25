@@ -40,6 +40,7 @@ fun PhotoViewerScreen(
                 
                 // Trigger Spotify to play the contextual track!
                 songUri?.let { uri ->
+                    viewModel.resetTrackState()
                     viewModel.playSpotifyUri(context, uri)
                 }
             } catch (e: Exception) {

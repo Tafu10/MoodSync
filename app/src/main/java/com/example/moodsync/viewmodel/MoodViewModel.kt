@@ -178,6 +178,11 @@ class MoodViewModel(application: Application) : AndroidViewModel(application) {
         spotifyHelper.pause()
     }
 
+    fun resetTrackState() {
+        _currentTrack.value = "Ready to Play"
+        _currentTrackImage.value = null
+    }
+
     private val _isEmotionFrozen = MutableStateFlow(false)
     val isEmotionFrozen: StateFlow<Boolean> = _isEmotionFrozen.asStateFlow()
 
@@ -307,26 +312,28 @@ class MoodViewModel(application: Application) : AndroidViewModel(application) {
     private fun getRandomTrackForMood(mood: String): Pair<String, String> {
         val tracks = when (mood) {
             "Happy" -> listOf(
-                "Happy by Pharrell" to "spotify:track:60nZcImGkarXZe4Y1Q9Z4o",
-                "Don't Stop Me Now by Queen" to "spotify:track:5T8EDUDqKcs6OSWevUgQvY",
-                "Walking On Sunshine by Katrina" to "spotify:track:05wIrZSwNlOUc9q4x4m3zT"
+                "Levitating by Dua Lipa" to "spotify:track:5nujrmhLynf4yMoMtj8AQF",
+                "Blinding Lights by The Weeknd" to "spotify:track:0VjIjW4GlUZAMYd2vXMi3b",
+                "Watermelon Sugar by Harry Styles" to "spotify:track:6UelLqGlAItqtkF4nK10Zl"
             )
             "Sad" -> listOf(
-                "Someone Like You by Adele" to "spotify:track:1zwMYTA5nlNjZxYrvBB2pV",
-                "Fix You by Coldplay" to "spotify:track:47EWMOElkkbMp5m9SBkx7d",
-                "Let Her Go by Passenger" to "spotify:track:1KzwqmV0rU1B9iZqY8T3eH"
+                "lovely by Billie Eilish" to "spotify:track:0u2P5u6lvoDfwTYjAADbn4",
+                "Someone You Loved by Lewis Capaldi" to "spotify:track:7qEHsqek33rTcFNT9PFqLf",
+                "Stay With Me by Sam Smith" to "spotify:track:5NMmZRWsNieHcC5zcljwVR"
             )
             "Surprise" -> listOf(
                 "Uptown Funk by Mark Ronson" to "spotify:track:32OlwWuMpZ6b0aN2RZOeMS",
                 "Bad Guy by Billie Eilish" to "spotify:track:2Fxmhks0bxGSBdJ92vM42m"
             )
             "Angry" -> listOf(
-                "Break Stuff by Limp Bizkit" to "spotify:track:5cZqsjVs6MevCnAkasbEOX",
-                "Killing In The Name by RATM" to "spotify:track:59WN2psjkt1tyaxjnVbbK0"
+                "Numb by Linkin Park" to "spotify:track:2nLtzopw4rPReszdYBJU6h",
+                "Smells Like Teen Spirit by Nirvana" to "spotify:track:5ghIJDpPoe3CfHMGu71E6T",
+                "Enter Sandman by Metallica" to "spotify:track:5sICkBXVmaCQk5aISGR3x1"
             )
             else -> listOf(
-                "Weightless by Marconi Union" to "spotify:track:6kkwzB6hXLIONkEk9JciA6",
-                "Clair de Lune by Debussy" to "spotify:track:6kf1h2AtoQW888r9x03q9L"
+                "Yellow by Coldplay" to "spotify:track:3AJwUDP919kvQ9QcozQPxg",
+                "Dreams by Fleetwood Mac" to "spotify:track:0ofHAoxe9vBkTCp2UQIavz",
+                "Sunset Lover by Petit Biscuit" to "spotify:track:0hNduWmlWmEmuwEFcYvRuN"
             )
         }
         return tracks.random()
@@ -362,6 +369,17 @@ class MoodViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
         )
+    }
+
+    fun deletePhoto(photoPath: String) {
+        val photoFile = File(photoPath)
+        val metadataFile = File(photoFile.parent, "${photoFile.nameWithoutExtension}.json")
+        
+        if (photoFile.exists()) photoFile.delete()
+        if (metadataFile.exists()) metadataFile.delete()
+        
+        // Trigger a refresh so the UI updates
+        _photoRefreshTrigger.value += 1
     }
 
     fun clearRegisteredFace() {

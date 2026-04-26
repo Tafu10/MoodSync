@@ -17,6 +17,8 @@ import com.google.mlkit.vision.face.Face
 import com.example.moodsync.ml.HeuristicEmotionEngine
 import java.io.File
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 sealed class CalibrationDialogState {
     data class Recognized(val name: String) : CalibrationDialogState()
@@ -123,6 +125,8 @@ class MoodViewModel(application: Application) : AndroidViewModel(application) {
         _calibrationDialogState.value = null
     }
 
+    private val _isPlaying = MutableStateFlow(false)
+    val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
     private val _isVerifying = MutableStateFlow(false)
     val isVerifying: StateFlow<Boolean> = _isVerifying.asStateFlow()
 
@@ -311,36 +315,6 @@ class MoodViewModel(application: Application) : AndroidViewModel(application) {
         _verificationMessage.value = null
     }
 
-    private fun getRandomTrackForMood(mood: String): Pair<String, String> {
-        val tracks = when (mood) {
-            "Happy" -> listOf(
-                "Levitating by Dua Lipa" to "spotify:track:5nujrmhLynf4yMoMtj8AQF",
-                "Blinding Lights by The Weeknd" to "spotify:track:0VjIjW4GlUZAMYd2vXMi3b",
-                "Watermelon Sugar by Harry Styles" to "spotify:track:6UelLqGlAItqtkF4nK10Zl"
-            )
-            "Sad" -> listOf(
-                "lovely by Billie Eilish" to "spotify:track:0u2P5u6lvoDfwTYjAADbn4",
-                "Someone You Loved by Lewis Capaldi" to "spotify:track:7qEHsqek33rTcFNT9PFqLf",
-                "Stay With Me by Sam Smith" to "spotify:track:5NMmZRWsNieHcC5zcljwVR"
-            )
-            "Surprise" -> listOf(
-                "Uptown Funk by Mark Ronson" to "spotify:track:32OlwWuMpZ6b0aN2RZOeMS",
-                "Bad Guy by Billie Eilish" to "spotify:track:2Fxmhks0bxGSBdJ92vM42m"
-            )
-            "Angry" -> listOf(
-                "Numb by Linkin Park" to "spotify:track:2nLtzopw4rPReszdYBJU6h",
-                "Smells Like Teen Spirit by Nirvana" to "spotify:track:5ghIJDpPoe3CfHMGu71E6T",
-                "Enter Sandman by Metallica" to "spotify:track:5sICkBXVmaCQk5aISGR3x1"
-            )
-            else -> listOf(
-                "Yellow by Coldplay" to "spotify:track:3AJwUDP919kvQ9QcozQPxg",
-                "Dreams by Fleetwood Mac" to "spotify:track:0ofHAoxe9vBkTCp2UQIavz",
-                "Sunset Lover by Petit Biscuit" to "spotify:track:0hNduWmlWmEmuwEFcYvRuN"
-            )
-        }
-        return tracks.random()
-    }
-
     fun captureMoodPhoto(context: Context, imageCapture: androidx.camera.core.ImageCapture, mood: String, onComplete: (String) -> Unit) {
         val activeProfile = _activeCollectionSubject.value ?: "Unknown"
         val profileDir = File(context.filesDir, "MoodSync/$activeProfile/$mood")
@@ -356,13 +330,11 @@ class MoodViewModel(application: Application) : AndroidViewModel(application) {
                 override fun onImageSaved(output: androidx.camera.core.ImageCapture.OutputFileResults) {
                     viewModelScope.launch {
                         val metadataFile = File(photoFile.parent, "${photoFile.nameWithoutExtension}.json")
-                        
-                        // Try to get dynamic track from Web API, fallback to hardcoded list
-                        val webApiClient = com.example.moodsync.spotify.SpotifyWebApiClient()
-                        val dynamicTrack = webApiClient.getRandomTrackForMood(spotifyAccessToken, mood)
-                        
-                        val trackName = dynamicTrack?.first ?: getRandomTrackForMood(mood).first
-                        val trackUri = dynamicTrack?.second ?: getRandomTrackForMood(mood).second
+                        // Spotify Web API restricts access for Developer Apps,
+                        // so we pull from the internal massive TrackDatabase of 100 global hits!
+                        val dynamicTrack = com.example.moodsync.spotify.TrackDatabase.getRandomTrack(mood)
+                        val trackName = dynamicTrack.first
+                        val trackUri = dynamicTrack.second
                         
                         metadataFile.writeText("{\"mood\": \"$mood\", \"songUri\": \"$trackUri\", \"songName\": \"$trackName\"}")
                         _photoRefreshTrigger.value += 1

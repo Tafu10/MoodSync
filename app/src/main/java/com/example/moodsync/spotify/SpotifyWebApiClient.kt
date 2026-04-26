@@ -21,15 +21,17 @@ class SpotifyWebApiClient {
         "Neutral" to "37i9dQZF1DX4WYpdVIPcmO"     // Chill Hits
     )
 
-    suspend fun getRandomTrackForMood(accessToken: String?, mood: String): Pair<String, String>? {
-        if (accessToken == null) return null
+    suspend fun getRandomTrackForMood(accessToken: String?, mood: String, onError: (String) -> Unit = {}): Pair<String, String>? {
+        if (accessToken == null) {
+            onError("No Access Token! Please click Link Spotify API.")
+            return null
+        }
 
         val playlistId = playlistMap[mood] ?: playlistMap["Neutral"]
         
         return withContext(Dispatchers.IO) {
             try {
                 // Fetch up to 100 tracks from the playlist. 
-                // Because we pass the user's Access Token, Spotify automatically filters by their country!
                 val url = URL("https://api.spotify.com/v1/playlists/$playlistId/tracks?limit=100")
                 val connection = url.openConnection() as HttpURLConnection
                 connection.requestMethod = "GET"
@@ -45,25 +47,43 @@ class SpotifyWebApiClient {
                     reader.close()
 
                     val json = JSONObject(responseStr)
-                    val items = json.getJSONArray("items")
+                    val items = json.optJSONArray("items")
                     
-                    if (items.length() > 0) {
-                        // Pick a random track from the 50 fetched
-                        val randomIndex = (0 until items.length()).random()
-                        val trackObj = items.getJSONObject(randomIndex).getJSONObject("track")
-                        val trackName = trackObj.getString("name")
-                        val trackUri = trackObj.getString("uri")
-                        val artistsArray = trackObj.getJSONArray("artists")
-                        val artistName = if (artistsArray.length() > 0) artistsArray.getJSONObject(0).getString("name") else ""
+                    if (items != null && items.length() > 0) {
+                        val validTracks = mutableListOf<Pair<String, String>>()
                         
-                        val fullName = if (artistName.isNotEmpty()) "$trackName by $artistName" else trackName
-                        return@withContext Pair(fullName, trackUri)
+                        for (i in 0 until items.length()) {
+                            val item = items.optJSONObject(i) ?: continue
+                            val trackObj = item.optJSONObject("track") ?: continue
+                            
+                            val trackName = trackObj.optString("name", "")
+                            val trackUri = trackObj.optString("uri", "")
+                            if (trackUri.isEmpty() || trackName.isEmpty()) continue
+                            
+                            val artistsArray = trackObj.optJSONArray("artists")
+                            val artistName = if (artistsArray != null && artistsArray.length() > 0) artistsArray.optJSONObject(0)?.optString("name", "") ?: "" else ""
+                            
+                            val fullName = if (artistName.isNotEmpty()) "$trackName by $artistName" else trackName
+                            validTracks.add(Pair(fullName, trackUri))
+                        }
+                        
+                        if (validTracks.isNotEmpty()) {
+                            return@withContext validTracks.random()
+                        } else {
+                            onError("Playlist was empty or had no valid tracks.")
+                        }
+                    } else {
+                        onError("No items returned from playlist.")
                     }
                 } else {
-                    Log.e("SpotifyWebAPI", "Failed to fetch playlist: ${connection.responseCode} - ${connection.responseMessage}")
+                    val errorMsg = "HTTP ${connection.responseCode}: ${connection.responseMessage}"
+                    Log.e("SpotifyWebAPI", errorMsg)
+                    onError(errorMsg)
                 }
             } catch (e: Exception) {
-                Log.e("SpotifyWebAPI", "Error fetching dynamic track: ${e.message}")
+                val errorMsg = "Network Error: ${e.message}"
+                Log.e("SpotifyWebAPI", errorMsg)
+                onError(errorMsg)
             }
             null
         }

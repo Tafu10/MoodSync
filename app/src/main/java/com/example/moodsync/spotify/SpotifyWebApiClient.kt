@@ -28,11 +28,12 @@ class SpotifyWebApiClient {
         
         return withContext(Dispatchers.IO) {
             try {
-                // Fetch the tracks from the playlist using the user's market to avoid geo-blocks
-                val url = URL("https://api.spotify.com/v1/playlists/\$playlistId/tracks?limit=50&market=from_token")
+                // Fetch up to 100 tracks from the playlist. 
+                // Because we pass the user's Access Token, Spotify automatically filters by their country!
+                val url = URL("https://api.spotify.com/v1/playlists/$playlistId/tracks?limit=100")
                 val connection = url.openConnection() as HttpURLConnection
                 connection.requestMethod = "GET"
-                connection.setRequestProperty("Authorization", "Bearer \$accessToken")
+                connection.setRequestProperty("Authorization", "Bearer $accessToken")
                 connection.setRequestProperty("Accept", "application/json")
                 connection.connectTimeout = 5000
                 connection.readTimeout = 5000
@@ -55,14 +56,14 @@ class SpotifyWebApiClient {
                         val artistsArray = trackObj.getJSONArray("artists")
                         val artistName = if (artistsArray.length() > 0) artistsArray.getJSONObject(0).getString("name") else ""
                         
-                        val fullName = if (artistName.isNotEmpty()) "\$trackName by \$artistName" else trackName
+                        val fullName = if (artistName.isNotEmpty()) "$trackName by $artistName" else trackName
                         return@withContext Pair(fullName, trackUri)
                     }
                 } else {
-                    Log.e("SpotifyWebAPI", "Failed to fetch playlist: \${connection.responseCode} - \${connection.responseMessage}")
+                    Log.e("SpotifyWebAPI", "Failed to fetch playlist: ${connection.responseCode} - ${connection.responseMessage}")
                 }
             } catch (e: Exception) {
-                Log.e("SpotifyWebAPI", "Error fetching dynamic track: \${e.message}")
+                Log.e("SpotifyWebAPI", "Error fetching dynamic track: ${e.message}")
             }
             null
         }

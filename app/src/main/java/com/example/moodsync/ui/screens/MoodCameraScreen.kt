@@ -26,7 +26,6 @@ fun MoodCameraScreen(
     val activeProfile by viewModel.activeCollectionSubject.collectAsState()
     val calibrationDialogState by viewModel.calibrationDialogState.collectAsState()
     val context = LocalContext.current
-    val activity = context as? android.app.Activity
     
     var imageCaptureUseCase by remember { mutableStateOf<androidx.camera.core.ImageCapture?>(null) }
 

@@ -17,8 +17,6 @@ import com.google.mlkit.vision.face.Face
 import com.example.moodsync.ml.HeuristicEmotionEngine
 import java.io.File
 import androidx.core.content.ContextCompat
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 sealed class CalibrationDialogState {
     data class Recognized(val name: String) : CalibrationDialogState()
@@ -51,7 +49,7 @@ class MoodViewModel(application: Application) : AndroidViewModel(application) {
     private val _currentTrackImage = MutableStateFlow<android.graphics.Bitmap?>(null)
     val currentTrackImage: StateFlow<android.graphics.Bitmap?> = _currentTrackImage.asStateFlow()
 
-    var spotifyAccessToken: String? = null
+
 
     private val _currentTrackUri = MutableStateFlow<String?>("spotify:track:7ouMYWcgJqo60a2vKkM7tT") // default fallback
     val currentTrackUri: StateFlow<String?> = _currentTrackUri.asStateFlow()
@@ -297,7 +295,7 @@ class MoodViewModel(application: Application) : AndroidViewModel(application) {
                     _isUnlocked.value = true
                     _verificationMessage.value = "Access Granted"
                 } else {
-                    _verificationMessage.value = "Access Denied. Distance: \$distance"
+                    _verificationMessage.value = "Access Denied. Distance: $distance"
                 }
             } catch (e: Exception) {
                 _verificationMessage.value = "Error during verification."

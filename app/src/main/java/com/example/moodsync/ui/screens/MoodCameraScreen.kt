@@ -135,6 +135,49 @@ fun MoodCameraScreen(
             }
         }
 
+        // Spotify Connection Status + Reconnect
+        val spotifyStatus by viewModel.currentTrack.collectAsState()
+        val isSpotifyFailed = spotifyStatus?.startsWith("Failed") == true || spotifyStatus == "Not Connected"
+        
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(top = 48.dp, end = 12.dp)
+        ) {
+            Column(horizontalAlignment = Alignment.End) {
+                // Status dot
+                val (statusColor, statusText) = when {
+                    spotifyStatus == "Ready to Play" -> Color(0xFF4CAF50) to "Spotify ✓"
+                    spotifyStatus == "Connecting to Spotify..." -> Color(0xFFFFC107) to "Connecting..."
+                    isSpotifyFailed -> Color(0xFFF44336) to "Spotify ✗"
+                    spotifyStatus != null && !spotifyStatus!!.startsWith("Failed") && spotifyStatus != "Not Connected" -> Color(0xFF1DB954) to "♫ Playing"
+                    else -> Color.Gray to "Spotify"
+                }
+                
+                Text(
+                    text = statusText,
+                    color = statusColor,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier
+                        .background(Color(0xCC000000), shape = RoundedCornerShape(8.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+                
+                // Show reconnect button if failed
+                if (isSpotifyFailed) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Button(
+                        onClick = { viewModel.connectToSpotify(context) },
+                        modifier = Modifier.height(32.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1DB954)),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+                    ) {
+                        Text("Reconnect", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+        }
+
         // Bottom Controls
         Column(
             modifier = Modifier
